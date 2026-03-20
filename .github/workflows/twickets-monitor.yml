@@ -5,7 +5,7 @@ env:
 
 on:
   schedule:
-    - cron: "*/5 * * * *"     # runs every 5 minutes
+    - cron: "*/5 * * * *"   # every 5 minutes
   workflow_dispatch:
 
 jobs:
@@ -22,9 +22,11 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests
 
       - name: Run Twickets monitor
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
         run: python scripts/check_twickets.py
 
       - name: Commit updated snapshot
@@ -34,3 +36,4 @@ jobs:
           git add snapshots/tickets.json || true
           git commit -m "Update snapshot" || true
           git push || true
+``
