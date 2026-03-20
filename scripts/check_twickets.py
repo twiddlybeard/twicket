@@ -1,29 +1,34 @@
 import os
 import json
 import requests
-from bs4 import BeautifulSoup
 
-EVENT_URL = "https://www.twickets.live/en/event/1989018878176403456"
+EVENT_ID = "1989018878176403456"
+API_URL = f"https://www.twickets.live/api/listings?eventId={EVENT_ID}"
+EVENT_URL = f"https://www.twickets.live/en/event/{EVENT_ID}"
 SNAPSHOT_PATH = "snapshots/tickets.json"
+TEAMS_WEBHOOK_URL = os.getenv("TEAMS_WEBHOOK_URL")
 
 os.makedirs("snapshots", exist_ok=True)
 
+
 def fetch_listings():
-    response = requests.get(EVENT_URL, timeout=15)
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
+    """Fetch JSON listings from Twickets API (avoids Cloudflare 403)."""
+    r = requests.get(API_URL, timeout=15)
+    r.raise_for_status()
+    data = r.json()
 
-    # Twickets uses JS, but some listings still appear in HTML
-    ticket_cards = soup.select("div.ticket-card")  # may require adapting later
     listings = []
-
-    for card in ticket_cards:
+    for item in data.get("items", []):
         listings.append({
-            "title": card.get_text(strip=True),
-            "id": hash(card.get_text(strip=True))
+            "id": item.get("id"),
+            "title": (
+                f"{item.get('sectionName', '')} "
+                f"{item.get('rowName', '')} "
+                f"£{item.get('price', '')}".strip()
+            )
         })
-
     return listings
+
 
 def load_previous():
     if not os.path.exists(SNAPSHOT_PATH):
@@ -31,9 +36,25 @@ def load_previous():
     with open(SNAPSHOT_PATH, "r") as f:
         return json.load(f)
 
+
 def save_snapshot(listings):
     with open(SNAPSHOT_PATH, "w") as f:
         json.dump(listings, f, indent=2)
+
+
+def send_teams_message(message: str):
+    if not TEAMS_WEBHOOK_URL:
+        print("⚠️ TEAMS_WEBHOOK_URL not set — cannot send Teams message.")
+        return
+
+    payload = { "text": message }
+
+    r = requests.post(TEAMS_WEBHOOK_URL, json=payload)
+    if r.status_code != 200:
+        print(f"❌ Failed to send Teams notification: {r.text}")
+    else:
+        print("📨 Sent Teams alert successfully.")
+
 
 def main():
     print("Fetching latest listings…")
@@ -47,13 +68,24 @@ def main():
 
     if new_ids:
         print("🎉 NEW TICKETS FOUND!")
+
+        msg = [
+            "🎟 **New Twickets Tickets Found!**",
+            f"Event: {EVENT_URL}",
+            ""
+        ]
+
         for listing in current:
             if listing["id"] in new_ids:
                 print("👉", listing["title"])
+                msg.append(f"- {listing['title']}")
+
+        send_teams_message("\n".join(msg))
     else:
         print("No new listings.")
 
     save_snapshot(current)
+
 
 if __name__ == "__main__":
     main()
