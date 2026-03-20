@@ -11,8 +11,8 @@ TEAMS_WEBHOOK_URL = os.getenv("TEAMS_WEBHOOK_URL")
 os.makedirs("snapshots", exist_ok=True)
 
 
+
 def fetch_listings():
-    """Fetch JSON listings from Twickets API (avoids Cloudflare 403)."""
     r = requests.get(API_URL, timeout=15)
     r.raise_for_status()
     data = r.json()
@@ -21,13 +21,11 @@ def fetch_listings():
     for item in data.get("items", []):
         listings.append({
             "id": item.get("id"),
-            "title": (
-                f"{item.get('sectionName', '')} "
-                f"{item.get('rowName', '')} "
-                f"£{item.get('price', '')}".strip()
-            )
+            "title": f"{item.get('sectionName', '')} {item.get('rowName', '')} £{item.get('price', '')}"
         })
+
     return listings
+
 
 
 def load_previous():
